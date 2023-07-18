@@ -26,6 +26,8 @@ import { Duplex, DuplexOptions } from "stream";
 import { SecureContextOptions } from "tls";
 import { URL } from "url";
 import { ZlibOptions } from "zlib";
+import * as net from 'net';
+import * as tls from 'tls';
 
 // can not get all overload of BufferConstructor['from'], need to copy all it's first arguments here
 // https://github.com/microsoft/TypeScript/issues/32164
@@ -344,6 +346,291 @@ declare namespace WebSocket {
         address: string;
         family: string;
         port: number;
+    }
+
+    /**
+     * HyBi Receiver implementation.
+     *
+     * @extends Writable
+     */
+    class Receiver {
+        /**
+         * Creates a Receiver instance.
+         *
+         * @param {Object} [options] Options object
+         * @param {String} [options.binaryType=nodebuffer] The type for binary data
+         * @param {Object} [options.extensions] An object containing the negotiated
+         *     extensions
+         * @param {Boolean} [options.isServer=false] Specifies whether to operate in
+         *     client or server mode
+         * @param {Number} [options.maxPayload=0] The maximum allowed message length
+         * @param {Boolean} [options.skipUTF8Validation=false] Specifies whether or
+         *     not to skip UTF-8 validation for text and close messages
+         */
+        constructor(options?: {
+            binaryType?: string | undefined;
+            extensions?: Object | undefined;
+            isServer?: boolean | undefined;
+            maxPayload?: number | undefined;
+            skipUTF8Validation?: boolean | undefined;
+        } | undefined);
+        _binaryType: string;
+        _extensions: Object;
+        _isServer: boolean;
+        _maxPayload: number;
+        _skipUTF8Validation: boolean;
+        _bufferedBytes: number;
+        _buffers: any[];
+        _compressed: boolean;
+        _payloadLength: number;
+        _mask: any;
+        _fragmented: number;
+        _masked: boolean;
+        _fin: boolean;
+        _opcode: number;
+        _totalPayloadLength: number;
+        _messageLength: number;
+        _fragments: any[];
+        _state: number;
+        _loop: boolean;
+        /**
+         * Implements `Writable.prototype._write()`.
+         *
+         * @param {Buffer} chunk The chunk of data to write
+         * @param {String} encoding The character encoding of `chunk`
+         * @param {Function} cb Callback
+         * @private
+         */
+        private _write;
+        /**
+         * Consumes `n` bytes from the buffered data.
+         *
+         * @param {Number} n The number of bytes to consume
+         * @return {Buffer} The consumed bytes
+         * @private
+         */
+        private consume;
+        /**
+         * Starts the parsing loop.
+         *
+         * @param {Function} cb Callback
+         * @private
+         */
+        private startLoop;
+        /**
+         * Reads the first two bytes of a frame.
+         *
+         * @return {(RangeError|undefined)} A possible error
+         * @private
+         */
+        private getInfo;
+        /**
+         * Gets extended payload length (7+16).
+         *
+         * @return {(RangeError|undefined)} A possible error
+         * @private
+         */
+        private getPayloadLength16;
+        /**
+         * Gets extended payload length (7+64).
+         *
+         * @return {(RangeError|undefined)} A possible error
+         * @private
+         */
+        private getPayloadLength64;
+        /**
+         * Payload length has been read.
+         *
+         * @return {(RangeError|undefined)} A possible error
+         * @private
+         */
+        private haveLength;
+        /**
+         * Reads mask bytes.
+         *
+         * @private
+         */
+        private getMask;
+        /**
+         * Reads data bytes.
+         *
+         * @param {Function} cb Callback
+         * @return {(Error|RangeError|undefined)} A possible error
+         * @private
+         */
+        private getData;
+        /**
+         * Decompresses data.
+         *
+         * @param {Buffer} data Compressed data
+         * @param {Function} cb Callback
+         * @private
+         */
+        private decompress;
+        /**
+         * Handles a data message.
+         *
+         * @return {(Error|undefined)} A possible error
+         * @private
+         */
+        private dataMessage;
+        /**
+         * Handles a control message.
+         *
+         * @param {Buffer} data Data to handle
+         * @return {(Error|RangeError|undefined)} A possible error
+         * @private
+         */
+        private controlMessage;
+    }
+
+    /**
+     * HyBi Sender implementation.
+     */
+    class Sender {
+       /**
+        * Frames a piece of data according to the HyBi WebSocket protocol.
+        *
+        * @param {(Buffer|String)} data The data to frame
+        * @param {Object} options Options object
+        * @param {Boolean} [options.fin=false] Specifies whether or not to set the
+        *     FIN bit
+        * @param {Function} [options.generateMask] The function used to generate the
+        *     masking key
+        * @param {Boolean} [options.mask=false] Specifies whether or not to mask
+        *     `data`
+        * @param {Buffer} [options.maskBuffer] The buffer used to store the masking
+        *     key
+        * @param {Number} options.opcode The opcode
+        * @param {Boolean} [options.readOnly=false] Specifies whether `data` can be
+        *     modified
+        * @param {Boolean} [options.rsv1=false] Specifies whether or not to set the
+        *     RSV1 bit
+        * @return {(Buffer|String)[]} The framed data
+        * @public
+        */
+       public static frame(data: (Buffer | string), options: {
+           fin?: boolean | undefined;
+           generateMask?: Function | undefined;
+           mask?: boolean | undefined;
+           maskBuffer?: any;
+           opcode: number;
+           readOnly?: boolean | undefined;
+           rsv1?: boolean | undefined;
+       }): (Buffer | string)[];
+       /**
+        * Creates a Sender instance.
+        *
+        * @param {(net.Socket|tls.TLSSocket)} socket The connection socket
+        * @param {Object} [extensions] An object containing the negotiated extensions
+        * @param {Function} [generateMask] The function used to generate the masking
+        *     key
+        */
+       constructor(socket: (net.Socket | tls.TLSSocket), extensions?: Object | undefined, generateMask?: Function | undefined);
+       _extensions: Object;
+       _generateMask: Function | undefined;
+       _maskBuffer: any;
+       _socket: any;
+       _firstFragment: boolean;
+       _compress: boolean;
+       _bufferedBytes: number;
+       _deflating: boolean;
+       _queue: any[];
+       /**
+        * Sends a close message to the other peer.
+        *
+        * @param {Number} [code] The status code component of the body
+        * @param {(String|Buffer)} [data] The message component of the body
+        * @param {Boolean} [mask=false] Specifies whether or not to mask the message
+        * @param {Function} [cb] Callback
+        * @public
+        */
+       public close(code?: number | undefined, data?: (string | Buffer), mask?: boolean | undefined, cb?: Function | undefined): void;
+       /**
+        * Sends a ping message to the other peer.
+        *
+        * @param {*} data The message to send
+        * @param {Boolean} [mask=false] Specifies whether or not to mask `data`
+        * @param {Function} [cb] Callback
+        * @public
+        */
+       public ping(data: any, mask?: boolean | undefined, cb?: Function | undefined): void;
+       /**
+        * Sends a pong message to the other peer.
+        *
+        * @param {*} data The message to send
+        * @param {Boolean} [mask=false] Specifies whether or not to mask `data`
+        * @param {Function} [cb] Callback
+        * @public
+        */
+       public pong(data: any, mask?: boolean | undefined, cb?: Function | undefined): void;
+       /**
+        * Sends a data message to the other peer.
+        *
+        * @param {*} data The message to send
+        * @param {Object} options Options object
+        * @param {Boolean} [options.binary=false] Specifies whether `data` is binary
+        *     or text
+        * @param {Boolean} [options.compress=false] Specifies whether or not to
+        *     compress `data`
+        * @param {Boolean} [options.fin=false] Specifies whether the fragment is the
+        *     last one
+        * @param {Boolean} [options.mask=false] Specifies whether or not to mask
+        *     `data`
+        * @param {Function} [cb] Callback
+        * @public
+        */
+       public send(data: any, options: {
+           binary?: boolean | undefined;
+           compress?: boolean | undefined;
+           fin?: boolean | undefined;
+           mask?: boolean | undefined;
+       }, cb?: Function | undefined): void;
+       /**
+        * Dispatches a message.
+        *
+        * @param {(Buffer|String)} data The message to send
+        * @param {Boolean} [compress=false] Specifies whether or not to compress
+        *     `data`
+        * @param {Object} options Options object
+        * @param {Boolean} [options.fin=false] Specifies whether or not to set the
+        *     FIN bit
+        * @param {Function} [options.generateMask] The function used to generate the
+        *     masking key
+        * @param {Boolean} [options.mask=false] Specifies whether or not to mask
+        *     `data`
+        * @param {Buffer} [options.maskBuffer] The buffer used to store the masking
+        *     key
+        * @param {Number} options.opcode The opcode
+        * @param {Boolean} [options.readOnly=false] Specifies whether `data` can be
+        *     modified
+        * @param {Boolean} [options.rsv1=false] Specifies whether or not to set the
+        *     RSV1 bit
+        * @param {Function} [cb] Callback
+        * @private
+        */
+       private dispatch;
+       /**
+        * Executes queued send operations.
+        *
+        * @private
+        */
+       private dequeue;
+       /**
+        * Enqueues a send operation.
+        *
+        * @param {Array} params Send operation parameters.
+        * @private
+        */
+       private enqueue;
+       /**
+        * Sends a frame.
+        *
+        * @param {Buffer[]} list The frame to send
+        * @param {Function} [cb] Callback
+        * @private
+        */
+       private sendFrame;
     }
 
     // WebSocket Server
